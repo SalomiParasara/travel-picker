@@ -1,10 +1,21 @@
+version: "3.9"
 services:
-  web:
-    build: .
+  app:
+    # Compose will tag the image with ${IMAGE}:${TAG} coming from env/Jenkins
+    image: ${IMAGE:-salomiparasara/travel-picker}:${TAG:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       - PORT=8000
     ports:
-      - "8081:8000"
+      - "${HOST_PORT:-8081}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   test:
     build:
       context: .
