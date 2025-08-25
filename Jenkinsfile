@@ -1,54 +1,67 @@
-// keep your style: top-level var for the built image tag
+// top-level var for the built image tag
 def img
+def dockerImage
 
 pipeline {
   agent any
 
+  parameters {
+    string(name: 'APP_NAME',   defaultValue: 'travel-picker', description: 'App/Container name')
+    string(name: 'PORT',       defaultValue: '8000',          description: 'App internal port')
+    string(name: 'HOST_PORT',  defaultValue: '8081',          description: 'Host port to expose')
+    string(name: 'GITHUB_URL', defaultValue: 'https://github.com/SalomiParasara/travel-picker.git', description: 'Repo URL')
+  }
+
   environment {
-    registry           = "salomiparasara/travel-picker" // << change
-    registryCredential = "DOCKERHUB"                              // << Jenkins creds ID (Username+Password)
-    githubCredential   = "GITHUB"                                  // << or remove 'credentialsId' below if repo is public
-    dockerImage        = ''
-    PORT               = "8000"                                    // app's internal port (Flask sample uses 8000)
-    HOST_PORT          = "8081"                                    // host port to expose; change if busy
-    APP_NAME           = "${travel-picker}"
+    registry           = "salomiparasara/travel-picker" // Docker Hub repo
+    registryCredential = "DOCKERHUB"                    // Jenkins creds ID (Username+Password or Token)
+    githubCredential   = ""                             // If repo is private, set to Jenkins creds ID; else leave blank
+    APP_NAME           = "${params.APP_NAME}"
+    PORT               = "${params.PORT}"
+    HOST_PORT          = "${params.HOST_PORT}"
   }
 
   stages {
-
     stage('Checkout') {
       steps {
-        // If public repo: remove 'credentialsId: githubCredential'
-        git branch: 'main',
-            credentialsId: githubCredential,
-            url: 'https://github.com/YOUR_GH_USER/travel-picker.git' // << change
+        script {
+          if (env.githubCredential?.trim()) {
+            git branch: 'main',
+                credentialsId: env.githubCredential,
+                url: params.GITHUB_URL
+          } else {
+            git branch: 'main',
+                url: params.GITHUB_URL
+          }
+        }
       }
     }
 
     stage('Test') {
       steps {
-        sh '''
+        sh """
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest
           pytest -q
-        '''
+        """
       }
     }
 
     stage('Clean Up') {
       steps {
-        // safer cleanup: ignore errors if nothing exists
-        sh 'docker rm -f ${APP_NAME} || true'
-        sh 'docker rm -f ${APP_NAME}_smoke || true'
-        // remove previous images of this repo (optional)
-        sh 'docker image ls ${registry} --format "{{.ID}}" | xargs -r docker rmi -f || true'
+        sh "docker rm -f ${APP_NAME} || true"
+        sh "docker rm -f ${APP_NAME}_smoke || true"
+        // remove previous images for this repo (optional)
+        sh """
+          docker image ls ${registry} --format "{{.ID}}" | xargs -r docker rmi -f || true
+        """
       }
     }
 
     stage('Build Image') {
       steps {
         script {
-          img = "${registry}:${env.BUILD_ID}"
+          img = "${registry}:${env.BUILD_NUMBER}"
           echo "Building image: ${img}"
           dockerImage = docker.build(img)
         }
@@ -57,14 +70,16 @@ pipeline {
 
     stage('Smoke Test') {
       steps {
-        sh '''
+        sh """
           docker run -d --name ${APP_NAME}_smoke -p ${PORT}:${PORT} ${img}
           sleep 5
           curl -fsS http://localhost:${PORT}/healthz | grep -i '"ok"'
-        '''
+        """
       }
       post {
-        always { sh 'docker rm -f ${APP_NAME}_smoke || true' }
+        always {
+          sh "docker rm -f ${APP_NAME}_smoke || true"
+        }
       }
     }
 
@@ -72,7 +87,7 @@ pipeline {
       steps {
         script {
           docker.withRegistry('https://registry.hub.docker.com', registryCredential) {
-            // push build-id tag
+            // push build-number tag
             sh "docker push ${img}"
             // also push :latest
             sh "docker tag ${img} ${registry}:latest"
@@ -84,18 +99,17 @@ pipeline {
 
     stage('Deploy') {
       steps {
-        sh '''
+        sh """
           docker rm -f ${APP_NAME} || true
           docker run -d --name ${APP_NAME} -p ${HOST_PORT}:${PORT} ${img}
-        '''
+        """
       }
     }
   }
 
   post {
     always {
-      // keep disk clean; safe to ignore errs
-      sh 'docker image prune -f || true'
+      sh "docker image prune -f || true"
     }
   }
 }
