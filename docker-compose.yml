@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    environment:
+      - PORT=8000
+    ports:
+      - "8081:8000"
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: sh -lc "pip install -q pytest && pytest -q"
