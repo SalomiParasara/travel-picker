@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Travel Destination Picker</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>Random Travel Destination</h1>
+    <img src="{{ d.image }}" alt="{{ d.destination }}" class="hero" />
+    <h2>{{ d.destination }} — {{ d.country }}</h2>
+    <p><strong>Best Season:</strong> {{ d.season }} | <strong>Budget:</strong> {{ d.budget }}</p>
+
+    <form method="get">
+      <label>Season:
+        <select name="season">
+          <option value="">Any</option>
+          {% for s in ['Spring','Summer','Autumn','Winter'] %}
+          <option value="{{ s }}" {{ 'selected' if season==s else '' }}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Budget:
+        <select name="budget">
+          <option value="">Any</option>
+          {% for b in ['low','medium','high'] %}
+          <option value="{{ b }}" {{ 'selected' if budget==b else '' }}>{{ b|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">Suggest</button>
+    </form>
+
+    <p class="muted">API: <code>/api/destination?season=&budget=</code></p>
+  </main>
+</body>
+</html>

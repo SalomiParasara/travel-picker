@@ -1,0 +1,39 @@
+{
+  "destinations": [
+    {
+      "destination": "Santorini",
+      "country": "Greece",
+      "season": "Summer",
+      "budget": "high",
+      "image": "/static/images/placeholder.jpg"
+    },
+    {
+      "destination": "Udaipur",
+      "country": "India",
+      "season": "Winter",
+      "budget": "low",
+      "image": "/static/images/placeholder.jpg"
+    },
+    {
+      "destination": "Kyoto",
+      "country": "Japan",
+      "season": "Spring",
+      "budget": "medium",
+      "image": "/static/images/placeholder.jpg"
+    },
+    {
+      "destination": "Queenstown",
+      "country": "New Zealand",
+      "season": "Autumn",
+      "budget": "high",
+      "image": "/static/images/placeholder.jpg"
+    },
+    {
+      "destination": "Lisbon",
+      "country": "Portugal",
+      "season": "Spring",
+      "budget": "low",
+      "image": "/static/images/placeholder.jpg"
+    }
+  ]
+}
