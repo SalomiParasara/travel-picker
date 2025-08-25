@@ -11,7 +11,7 @@ pipeline {
     dockerImage        = ''
     PORT               = "8000"                                    // app's internal port (Flask sample uses 8000)
     HOST_PORT          = "8081"                                    // host port to expose; change if busy
-    APP_NAME           = "${JOB_NAME}"
+    APP_NAME           = "${travel-picker}"
   }
 
   stages {
