@@ -1,9 +1,15 @@
-// top-level var for the built image tag
+// top-level vars
 def img
 def dockerImage
 
 pipeline {
   agent any
+
+  options {
+    skipDefaultCheckout(true)
+    ansiColor('xterm')
+    timestamps()
+  }
 
   parameters {
     string(name: 'APP_NAME',   defaultValue: 'travel-picker', description: 'App/Container name')
@@ -13,12 +19,19 @@ pipeline {
   }
 
   environment {
-    registry           = "salomiparasara/travel-picker" // Docker Hub repo
-    registryCredential = "DOCKERHUB"                    // Jenkins creds ID (Username+Password or Token)
-    githubCredential   = ""                             // If repo is private, set to Jenkins creds ID; else leave blank
-    APP_NAME           = "${params.APP_NAME}"
-    PORT               = "${params.PORT}"
-    HOST_PORT          = "${params.HOST_PORT}"
+    // Docker Hub repo & creds
+    registry           = "salomiparasara/travel-picker"
+    registryCredential = "DOCKERHUB"
+
+    // Set ONLY if your repo is private; leave blank for public
+    githubCredential   = ""
+
+    // Derived/env
+    APP_NAME  = "${params.APP_NAME}"
+    PORT      = "${params.PORT}"
+    HOST_PORT = "${params.HOST_PORT}"
+
+    IMAGE_TAG = "v${env.BUILD_NUMBER}"
   }
 
   stages {
@@ -38,6 +51,8 @@ pipeline {
     }
 
     stage('Test') {
+      // Run tests in a Python container so the node doesn’t need system Python
+      agent { docker { image 'python:3.11-slim'; args '-u'; reuseNode true } }
       steps {
         sh """
           python -m pip install --upgrade pip
@@ -51,7 +66,7 @@ pipeline {
       steps {
         sh "docker rm -f ${APP_NAME} || true"
         sh "docker rm -f ${APP_NAME}_smoke || true"
-        // remove previous images for this repo (optional)
+        // optional: clear older images from this repo
         sh """
           docker image ls ${registry} --format "{{.ID}}" | xargs -r docker rmi -f || true
         """
@@ -61,8 +76,9 @@ pipeline {
     stage('Build Image') {
       steps {
         script {
-          img = "${registry}:${env.BUILD_NUMBER}"
+          img = "${env.registry}:${env.IMAGE_TAG}"
           echo "Building image: ${img}"
+          // build context = workspace (.)
           dockerImage = docker.build(img)
         }
       }
@@ -70,10 +86,16 @@ pipeline {
 
     stage('Smoke Test') {
       steps {
+        // Run on internal port; don’t occupy HOST_PORT yet
         sh """
           docker run -d --name ${APP_NAME}_smoke -p ${PORT}:${PORT} ${img}
-          sleep 5
-          curl -fsS http://localhost:${PORT}/healthz | grep -i '"ok"'
+          for i in 1 2 3 4 5; do
+            sleep 2
+            if curl -fsS http://localhost:${PORT}/healthz | grep -i '"ok"' >/dev/null; then
+              echo "Smoke OK"; exit 0
+            fi
+          done
+          echo "Smoke test failed"; docker logs ${APP_NAME}_smoke || true; exit 1
         """
       }
       post {
@@ -87,9 +109,7 @@ pipeline {
       steps {
         script {
           docker.withRegistry('https://registry.hub.docker.com', registryCredential) {
-            // push build-number tag
             sh "docker push ${img}"
-            // also push :latest
             sh "docker tag ${img} ${registry}:latest"
             sh "docker push ${registry}:latest"
           }
@@ -99,6 +119,7 @@ pipeline {
 
     stage('Deploy') {
       steps {
+        // Now expose on the chosen HOST_PORT
         sh """
           docker rm -f ${APP_NAME} || true
           docker run -d --name ${APP_NAME} -p ${HOST_PORT}:${PORT} ${img}
@@ -109,7 +130,11 @@ pipeline {
 
   post {
     always {
+      // Don’t fail the build if Docker CLI isn’t present; ignore errors
       sh "docker image prune -f || true"
+    }
+    failure {
+      echo "Build failed. Check earlier logs for details."
     }
   }
 }
